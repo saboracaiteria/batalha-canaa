@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { GameState, GameSettings, PlayerStats } from './types';
-import GameScene from './components/GameScene';
+import GameScene from './components/GameSceneSimple'; // Usando a versão OTIMIZADA
 import GameUI from './components/GameUI';
 import StartScreen from './components/StartScreen';
 import GameOverScreen from './components/GameOverScreen';

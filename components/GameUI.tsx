@@ -115,17 +115,19 @@ const GameUI: React.FC<Props> = ({ gameState, stats, settings, setSettings, onTo
       onTouchStart={(e) => { handleTouchStart(e); }}
       onTouchMove={(e) => { handleTouchMove(e); }}
     >
+      {/* Overlay de Dano */}
+      <div id="damage-flash" className="fixed inset-0 bg-red-600/40 opacity-0 pointer-events-none transition-opacity duration-75 z-[60]" />
 
       {/* JOYSTICK VIRTUAL (Esquerda Inferior) */}
       <div
-        className="pointer-events-auto absolute bottom-10 left-10 w-40 h-40 bg-white/10 rounded-full border-2 border-white/30 backdrop-blur-sm touch-none"
+        className="pointer-events-auto absolute bottom-10 left-10 w-40 h-40 bg-white/20 rounded-full border-4 border-white/50 backdrop-blur-md touch-none shadow-xl"
         onTouchStart={handleJoystickStart}
         onTouchMove={handleJoystickMove}
         onTouchEnd={handleJoystickEnd}
         ref={joystickRef}
       >
         <div
-          className="absolute w-16 h-16 bg-white/50 rounded-full shadow-lg"
+          className="absolute w-16 h-16 bg-white rounded-full shadow-lg"
           style={{
             left: '50%',
             top: '50%',
@@ -148,14 +150,19 @@ const GameUI: React.FC<Props> = ({ gameState, stats, settings, setSettings, onTo
             <div className="absolute top-0 left-0 w-full h-full bg-[conic-gradient(from_0deg,transparent,rgba(6,182,212,0.2),transparent)] animate-[spin_3s_linear_infinite]"></div>
           </div>
           <button
-            className="pointer-events-auto w-20 h-20 bg-red-500/50 rounded-full flex items-center justify-center border-4 border-red-400 active:scale-90 active:bg-red-500 transition-all absolute bottom-24 right-10 shadow-[0_0_30px_rgba(239,68,68,0.5)] z-50"
+            className="pointer-events-auto w-24 h-24 bg-red-600 rounded-full flex items-center justify-center border-4 border-white/50 active:scale-90 active:bg-red-700 transition-all absolute bottom-24 right-10 shadow-[0_0_30px_rgba(220,38,38,0.8)] z-50"
             onTouchStart={() => { inputRef.current.firing = true; }}
             onTouchEnd={() => { inputRef.current.firing = false; }}
+            onMouseDown={() => { inputRef.current.firing = true; }}
+            onMouseUp={() => { inputRef.current.firing = false; }}
           >
-            <i className="fas fa-crosshairs text-3xl"></i>
+            <i className="fas fa-crosshairs text-4xl text-white"></i>
           </button>
 
-          <button className="pointer-events-auto w-14 h-14 bg-white/10 rounded-3xl flex items-center justify-center border border-white/20 active:scale-90 transition-transform" onClick={onTogglePause}>
+          <button
+            className="pointer-events-auto w-14 h-14 bg-white/10 rounded-3xl flex items-center justify-center border border-white/20 active:scale-90 transition-transform"
+            onClick={onTogglePause}
+          >
             <i className="fas fa-th-large text-xl"></i>
           </button>
         </div>
@@ -166,12 +173,6 @@ const GameUI: React.FC<Props> = ({ gameState, stats, settings, setSettings, onTo
             <span className="text-xl font-black italic tracking-widest uppercase">Zona: {stats.zoneTimer}s</span>
           </div>
           {stats.zoneTimer === 0 && <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-[0.4em] animate-pulse">Encolhendo...</span>}
-          {stats.isInvulnerable && (
-            <div className="mt-2 px-6 py-1 bg-blue-500/80 rounded-full border border-blue-300 animate-pulse flex items-center gap-2 shadow-[0_0_15px_rgba(59,130,246,0.5)]">
-              <i className="fas fa-shield-halved text-xs"></i>
-              <span className="text-[10px] font-black uppercase tracking-widest text-white">ESCUDO ATIVO</span>
-            </div>
-          )}
         </div>
 
         {/* Direita: Status da Partida */}
@@ -256,32 +257,119 @@ const GameUI: React.FC<Props> = ({ gameState, stats, settings, setSettings, onTo
       {/* MENU DE PAUSA PAINEL */}
       {
         isPaused && (
-          <div className="absolute inset-0 pointer-events-auto bg-black/95 backdrop-blur-3xl z-[100] flex items-center justify-center p-10">
-            <div className="w-full max-w-md space-y-12 p-16 bg-white/5 border-2 border-white/10 rounded-[5rem] text-center shadow-2xl relative overflow-hidden">
-              <div className="absolute -top-32 -left-32 w-64 h-64 bg-cyan-500/10 rounded-full blur-[100px]"></div>
-              <h2 className="text-7xl font-black italic text-yellow-500 uppercase tracking-tighter">Ajustes</h2>
-              <div className="space-y-10">
-                <div className="space-y-4">
-                  <div className="flex justify-between text-sm font-black text-white/40 uppercase tracking-widest">Sensibilidade <span className="text-yellow-500 text-xl">{settings.sens}x</span></div>
-                  <input type="range" min="0.1" max="5" step="0.1" value={settings.sens} onChange={e => setSettings({ ...settings, sens: parseFloat(e.target.value) })} className="w-full h-3 bg-white/10 rounded-full appearance-none cursor-pointer" />
-                </div>
-                <div className="space-y-4">
-                  <div className="flex justify-between text-sm font-black text-white/40 uppercase tracking-widest">Qualidade <span className="text-yellow-500 text-xl">{settings.graphicsQuality}</span></div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {['low', 'medium', 'high', 'ultra'].map(q => (
-                      <button
-                        key={q}
-                        onClick={() => setSettings({ ...settings, graphicsQuality: q as any })}
-                        className={`py-2 rounded-xl text-[10px] font-black uppercase transition-all ${settings.graphicsQuality === q ? 'bg-yellow-500 text-slate-950' : 'bg-white/5 text-white/40'}`}
-                      >
-                        {q}
-                      </button>
-                    ))}
+          <div className="absolute inset-0 pointer-events-auto bg-black/90 backdrop-blur-2xl z-[100] flex items-center justify-center p-4">
+            <div className="w-full max-w-lg space-y-6 p-8 bg-slate-900/80 border border-white/10 rounded-3xl shadow-2xl relative overflow-hidden">
+              <h2 className="text-3xl font-black italic text-orange-500 uppercase tracking-tighter text-center">CONFIGURAÇÕES</h2>
+
+              <div className="space-y-6">
+                {/* Sensibilidade */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-[10px] font-black text-white/60 uppercase tracking-widest">
+                    Sensibilidade <span>{settings.sens.toFixed(1)}</span>
                   </div>
+                  <input
+                    type="range" min="0.1" max="5" step="0.1"
+                    value={settings.sens}
+                    onChange={e => setSettings({ ...settings, sens: parseFloat(e.target.value) })}
+                    className="w-full h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer accent-cyan-500"
+                  />
+                </div>
+
+                {/* Volume */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-[10px] font-black text-white/60 uppercase tracking-widest">
+                    Volume <span>{settings.volume.toFixed(1)}</span>
+                  </div>
+                  <input
+                    type="range" min="0" max="1" step="0.1"
+                    value={settings.volume}
+                    onChange={e => setSettings({ ...settings, volume: parseFloat(e.target.value) })}
+                    className="w-full h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer accent-cyan-500"
+                  />
+                </div>
+
+                {/* FOV */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-[10px] font-black text-white/60 uppercase tracking-widest">
+                    FOV <span>{settings.fov}</span>
+                  </div>
+                  <input
+                    type="range" min="60" max="120" step="1"
+                    value={settings.fov}
+                    onChange={e => setSettings({ ...settings, fov: parseInt(e.target.value) })}
+                    className="w-full h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer accent-cyan-500"
+                  />
+                </div>
+
+                {/* Tamanho Botões */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-[10px] font-black text-white/60 uppercase tracking-widest">
+                    Tamanho Botões <span>{settings.btnScale.toFixed(1)}</span>
+                  </div>
+                  <input
+                    type="range" min="0.5" max="2" step="0.1"
+                    value={settings.btnScale}
+                    onChange={e => setSettings({ ...settings, btnScale: parseFloat(e.target.value) })}
+                    className="w-full h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer accent-cyan-500"
+                  />
                 </div>
               </div>
-              <button className="w-full py-10 bg-yellow-500 text-slate-950 font-black rounded-[3rem] uppercase italic text-4xl active:scale-95 shadow-2xl shadow-yellow-500/30 transition-transform" onClick={onTogglePause}>Continuar</button>
-              <button className="w-full py-5 text-red-500/40 text-xs font-black uppercase tracking-[0.6em] hover:text-red-500 transition-colors" onClick={() => window.location.reload()}>Desistir da Partida</button>
+
+              <div className="h-px bg-white/10 my-4" />
+
+              {/* Seção Nova Partida */}
+              <div className="space-y-4">
+                <h3 className="text-xl font-black italic text-white uppercase tracking-tighter text-center">Nova Partida</h3>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-white/40 uppercase tracking-widest block">Qtd. Bots</label>
+                  <input
+                    type="number"
+                    value={settings.botCount}
+                    onChange={e => setSettings({ ...settings, botCount: Math.max(1, parseInt(e.target.value) || 1) })}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white font-bold"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-white/40 uppercase tracking-widest block">Dificuldade</label>
+                  <select
+                    value={settings.difficulty}
+                    onChange={e => setSettings({ ...settings, difficulty: e.target.value as any })}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white font-bold appearance-none"
+                  >
+                    <option value="easy">Easy</option>
+                    <option value="normal">Normal</option>
+                    <option value="hard">Hard</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 pt-2">
+                <button
+                  className="w-full py-4 bg-indigo-600 text-white font-black rounded-xl uppercase italic text-sm active:scale-95 transition-transform shadow-lg shadow-indigo-600/20"
+                >
+                  MOVER BOTÕES
+                </button>
+                <button
+                  className="w-full py-4 bg-rose-600 text-white font-black rounded-xl uppercase italic text-sm active:scale-95 transition-transform shadow-lg shadow-rose-600/20"
+                >
+                  RESETAR HUD
+                </button>
+                <button
+                  className="w-full py-4 bg-orange-500 text-slate-950 font-black rounded-xl uppercase italic text-xl active:scale-95 transition-transform shadow-lg shadow-orange-500/20"
+                  onClick={onTogglePause}
+                >
+                  CONTINUAR
+                </button>
+              </div>
+
+              <button
+                className="w-full pt-4 text-white/30 text-[10px] font-black uppercase tracking-[0.3em] hover:text-red-500 transition-colors"
+                onClick={() => window.location.reload()}
+              >
+                Desistir da Partida
+              </button>
             </div>
           </div>
         )
