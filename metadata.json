@@ -1,0 +1,5 @@
+{
+  "name": "Battle Canaã: Remastered",
+  "description": "A high-fidelity 3D Battle Royale experience featuring advanced bot AI, dynamic zone mechanics, and customizable HUD, built with React, Three.js, and Tailwind CSS.",
+  "requestFramePermissions": []
+}
