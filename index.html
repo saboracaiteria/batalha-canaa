@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>BATTLE CANAÃ: ULTRA REMASTER</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      background: #010409;
+      touch-action: none;
+      -webkit-user-select: none;
+         -moz-user-select: none;
+              user-select: none;
+      font-family: 'Inter', sans-serif;
+      overscroll-behavior: none;
+    }
+
+    #root {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      position: fixed;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      -moz-appearance: none;
+           appearance: none;
+      background: transparent;
+    }
+
+    input[type=range]::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 6px;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      height: 18px;
+      width: 18px;
+      border-radius: 50%;
+      background: #fbbf24;
+      cursor: pointer;
+      -webkit-appearance: none;
+      appearance: none;
+      margin-top: -6px;
+      box-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
+    }
+
+    #damage-flash {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle, transparent 40%, rgba(220, 38, 38, 0.7) 100%);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.1s;
+      z-index: 50;
+    }
+
+    .kill-msg {
+      animation: slideLeft 0.5s ease-out forwards;
+    }
+
+    @keyframes slideLeft {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+  </style>
+
+
+  <script type="module" crossorigin src="./assets/index-BVXtqwF6.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-BsuRy9tL.css">
+</head>
+
+<body>
+  <div id="damage-flash"></div>
+  <div id="root"></div>
+
+</body>
+
+</html>
