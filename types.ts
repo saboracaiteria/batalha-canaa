@@ -7,6 +7,11 @@ export enum GameState {
   GAMEOVER
 }
 
+export interface HUDPosition {
+  x: number;
+  y: number;
+}
+
 export interface GameSettings {
   sens: number;
   volume: number;
@@ -15,6 +20,16 @@ export interface GameSettings {
   botCount: number;
   difficulty: 'easy' | 'normal' | 'hard';
   graphicsQuality: 'low' | 'medium' | 'high' | 'ultra';
+  hudPositions?: {
+    joystick: HUDPosition;
+    sprint: HUDPosition;
+    fire: HUDPosition;
+    ads: HUDPosition;
+    jump: HUDPosition;
+    grenade: HUDPosition;
+    reload: HUDPosition;
+    radar: HUDPosition;
+  };
 }
 
 export enum WeaponType {

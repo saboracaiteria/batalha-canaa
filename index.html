@@ -3,22 +3,33 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>BATTLE CANAÃ: ULTRA REMASTER</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     body {
       margin: 0;
+      padding: 0;
       overflow: hidden;
+      position: fixed;
+      width: 100%;
+      height: 100%;
       background: #010409;
       touch-action: none;
       user-select: none;
       font-family: 'Inter', sans-serif;
+      overscroll-behavior: none;
     }
 
     #root {
       width: 100vw;
       height: 100vh;
+      overflow: hidden;
+      position: fixed;
     }
 
     canvas {
@@ -27,6 +38,7 @@
 
     input[type=range] {
       -webkit-appearance: none;
+      appearance: none;
       background: transparent;
     }
 
@@ -45,6 +57,7 @@
       background: #fbbf24;
       cursor: pointer;
       -webkit-appearance: none;
+      appearance: none;
       margin-top: -6px;
       box-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
     }

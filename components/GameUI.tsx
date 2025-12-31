@@ -8,16 +8,32 @@ interface Props {
   setSettings: (s: GameSettings) => void;
   onTogglePause: () => void;
   inputRef: React.MutableRefObject<any>;
+  isEditingHUD: boolean;
+  setIsEditingHUD: (val: boolean) => void;
 }
 
-const GameUI: React.FC<Props> = ({ gameState, stats, settings, setSettings, onTogglePause, inputRef }) => {
+const GameUI: React.FC<Props> = ({ gameState, stats, settings, setSettings, onTogglePause, inputRef, isEditingHUD, setIsEditingHUD }) => {
   // Estado do Joystick
   const [joyPos, setJoyPos] = useState({ x: 0, y: 0 });
   const [isTouchingJoystick, setIsTouchingJoystick] = useState(false);
+  const [draggingElement, setDraggingElement] = useState<'joystick' | 'sprint' | 'fire' | 'ads' | 'jump' | 'grenade' | 'reload' | 'radar' | null>(null);
   const joystickRef = useRef<HTMLDivElement>(null);
   const startTouchRef = useRef<{ x: number, y: number } | null>(null);
   const lastTouchRef = useRef<{ x: number, y: number } | null>(null);
   const isPaused = gameState === GameState.PAUSED;
+
+  const defaultHudPos = {
+    joystick: { x: 32, y: 32 },
+    sprint: { x: 74, y: 190 },
+    fire: { x: 40, y: 40 },
+    ads: { x: 40, y: 150 },
+    jump: { x: 150, y: 40 },
+    grenade: { x: 150, y: 140 },
+    reload: { x: 150, y: 220 },
+    radar: { x: 16, y: 16 }
+  };
+
+  const hudPositions = settings.hudPositions || defaultHudPos;
 
   // Manipulação do Joystick
   const handleJoystickStart = (e: React.TouchEvent) => {
@@ -68,12 +84,23 @@ const GameUI: React.FC<Props> = ({ gameState, stats, settings, setSettings, onTo
     inputRef.current.y = 0;
   };
 
+  const cameraTouchIdRef = useRef<number | null>(null);
+
   // Manipulação da Câmera (Touch)
   const handleTouchStart = (e: React.TouchEvent) => {
-    // Apenas considera toque na metade direita para câmera
+    // Modo Edição: Captura início do arraste
+    if (isEditingHUD) {
+      const touch = e.touches[0];
+      // Verifica se tocou perto dos elementos (lógica simples por coordenadas de tela vs elementos não é tão fácil aqui, 
+      // usaremos os eventos diretamente nos elementos abaixo)
+      return;
+    }
+
+    // Apenas considera toque na metade direita para iniciar câmera
     for (let i = 0; i < e.touches.length; i++) {
       const touch = e.touches[i];
-      if (touch.clientX > window.innerWidth / 2) {
+      if (touch.clientX > window.innerWidth / 2 && cameraTouchIdRef.current === null) {
+        cameraTouchIdRef.current = touch.identifier;
         lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
         break;
       }
@@ -81,20 +108,57 @@ const GameUI: React.FC<Props> = ({ gameState, stats, settings, setSettings, onTo
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (lastTouchRef.current) {
-      // Encontra o toque que está controlando a câmera
+    if (isEditingHUD && draggingElement) {
+      const touch = e.touches[0];
+      const isLeftAnchored = ['joystick', 'radar', 'sprint'].includes(draggingElement);
+
+      const newPos = {
+        x: isLeftAnchored ? touch.clientX - 40 : window.innerWidth - touch.clientX - 40,
+        y: window.innerHeight - touch.clientY - 40
+      };
+
+      // Clamp para não sair da tela
+      newPos.x = Math.max(0, Math.min(newPos.x, window.innerWidth - 80));
+      newPos.y = Math.max(0, Math.min(newPos.y, window.innerHeight - 80));
+
+      setSettings({
+        ...settings,
+        hudPositions: {
+          ...hudPositions,
+          [draggingElement]: newPos
+        }
+      });
+      return;
+    }
+
+    if (cameraTouchIdRef.current !== null) {
       for (let i = 0; i < e.touches.length; i++) {
         const touch = e.touches[i];
-        if (touch.clientX > window.innerWidth / 2) {
-          const dx = touch.clientX - lastTouchRef.current.x;
-          const dy = touch.clientY - lastTouchRef.current.y;
+        if (touch.identifier === cameraTouchIdRef.current) {
+          const dx = touch.clientX - (lastTouchRef.current?.x || touch.clientX);
+          const dy = touch.clientY - (lastTouchRef.current?.y || touch.clientY);
 
-          inputRef.current.yaw = (inputRef.current.yaw || 0) - dx * 0.005 * settings.sens;
-          inputRef.current.pitch = (inputRef.current.pitch || 0) + dy * 0.005 * settings.sens;
+          inputRef.current.yaw = (inputRef.current.yaw || 0) - dx * 0.005 * (settings.sens || 1.0);
+          inputRef.current.pitch = (inputRef.current.pitch || 0) + dy * 0.005 * (settings.sens || 1.0);
 
           lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
           break;
         }
+      }
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (isEditingHUD) {
+      setDraggingElement(null);
+      return;
+    }
+
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === cameraTouchIdRef.current) {
+        cameraTouchIdRef.current = null;
+        lastTouchRef.current = null;
+        break;
       }
     }
   };
@@ -111,130 +175,226 @@ const GameUI: React.FC<Props> = ({ gameState, stats, settings, setSettings, onTo
   const armorColor = stats.armor.level === 3 ? 'text-yellow-400' : stats.armor.level === 2 ? 'text-blue-400' : 'text-green-400';
 
   return (
-    <div className="absolute inset-0 pointer-events-none text-white select-none overflow-hidden"
-      onTouchStart={(e) => { handleTouchStart(e); }}
-      onTouchMove={(e) => { handleTouchMove(e); }}
-    >
+    <div className="absolute inset-0 pointer-events-none text-white select-none overflow-hidden">
+      {/* CAMADA DE TOQUE PARA CÂMERA (Cobre a tela toda mas fica atrás dos botões) */}
+      <div
+        className="absolute inset-0 pointer-events-auto z-0 touch-none"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      />
+
       {/* Overlay de Dano */}
       <div id="damage-flash" className="fixed inset-0 bg-red-600/40 opacity-0 pointer-events-none transition-opacity duration-75 z-[60]" />
 
-      {/* JOYSTICK VIRTUAL (Esquerda Inferior) */}
+      {/* JOYSTICK SEPARADO */}
       <div
-        className="pointer-events-auto absolute bottom-10 left-10 w-40 h-40 bg-white/20 rounded-full border-4 border-white/50 backdrop-blur-md touch-none shadow-xl"
-        onTouchStart={handleJoystickStart}
+        className={`pointer-events-auto absolute touch-none z-10 ${isEditingHUD && draggingElement === 'joystick' ? 'border-2 border-cyan-400 p-2' : ''}`}
+        style={{
+          transform: `scale(${(settings.btnScale || 1.0) * 0.9})`,
+          bottom: `${hudPositions.joystick.y}px`,
+          left: `${hudPositions.joystick.x}px`
+        }}
+        onTouchStart={(e) => {
+          if (isEditingHUD) setDraggingElement('joystick');
+          else handleJoystickStart(e);
+        }}
         onTouchMove={handleJoystickMove}
         onTouchEnd={handleJoystickEnd}
-        ref={joystickRef}
       >
         <div
-          className="absolute w-16 h-16 bg-white rounded-full shadow-lg"
-          style={{
-            left: '50%',
-            top: '50%',
-            transform: `translate(calc(-50% + ${joyPos.x}px), calc(-50% + ${joyPos.y}px))`
-          }}
-        />
+          className={`w-36 h-36 bg-black/20 rounded-full border-2 border-white/10 backdrop-blur-sm relative flex items-center justify-center ${isEditingHUD && draggingElement === 'joystick' ? 'animate-pulse' : ''}`}
+          ref={joystickRef}
+        >
+          <div
+            className="absolute w-14 h-14 bg-white/40 border-2 border-white/60 rounded-full shadow-2xl"
+            style={{
+              left: '50%',
+              top: '50%',
+              transform: `translate(calc(-50% + ${joyPos.x}px), calc(-50% + ${joyPos.y}px))`
+            }}
+          />
+        </div>
       </div>
 
+      {/* SPRINT SEPARADO */}
+      <button
+        className={`pointer-events-auto absolute z-10 w-14 h-14 rounded-full flex items-center justify-center transition-all ${isEditingHUD && draggingElement === 'sprint' ? 'border-2 border-yellow-400 animate-pulse' : ''} ${inputRef.current.isSprinting ? 'bg-yellow-400 scale-110 shadow-[0_0_20px_#facc15]' : 'bg-yellow-500/80 border-2 border-black/20'}`}
+        style={{
+          bottom: `${hudPositions.sprint.y}px`,
+          left: `${hudPositions.sprint.x}px`,
+          transform: `scale(${settings.btnScale || 1.0})`
+        }}
+        onTouchStart={() => {
+          if (isEditingHUD) setDraggingElement('sprint');
+          else inputRef.current.isSprinting = true;
+        }}
+        onTouchEnd={() => { if (!isEditingHUD) inputRef.current.isSprinting = false; }}
+      >
+        <i className="fas fa-person-running text-black text-xl"></i>
+      </button>
+
+      {/* FIRE BUTTON SEPARADO */}
+      <button
+        className={`pointer-events-auto absolute z-10 w-24 h-24 bg-red-600 rounded-full border-4 border-white/30 flex items-center justify-center active:scale-90 active:bg-red-700 transition-all shadow-[0_0_30px_rgba(220,38,38,0.5)] ${isEditingHUD && draggingElement === 'fire' ? 'border-dashed border-white animate-pulse' : ''}`}
+        style={{
+          bottom: `${hudPositions.fire.y}px`,
+          right: `${hudPositions.fire.x}px`,
+          transform: `scale(${settings.btnScale || 1.0})`
+        }}
+        onTouchStart={() => {
+          if (isEditingHUD) setDraggingElement('fire');
+          else inputRef.current.firing = true;
+        }}
+        onTouchEnd={() => { if (!isEditingHUD) inputRef.current.firing = false; }}
+      >
+        <i className="fas fa-fire text-white text-4xl"></i>
+      </button>
+
+      {/* ADS SEPARADO */}
+      <button
+        className={`pointer-events-auto absolute z-10 w-16 h-16 bg-cyan-500/80 rounded-full border border-white/30 flex items-center justify-center active:scale-95 transition-all ${isEditingHUD && draggingElement === 'ads' ? 'border-dashed border-white animate-pulse' : ''}`}
+        style={{
+          bottom: `${hudPositions.ads.y}px`,
+          right: `${hudPositions.ads.x}px`,
+          transform: `scale(${settings.btnScale || 1.0})`
+        }}
+        onTouchStart={() => {
+          if (isEditingHUD) setDraggingElement('ads');
+          else inputRef.current.isADS = true;
+        }}
+        onTouchEnd={() => { if (!isEditingHUD) inputRef.current.isADS = false; }}
+      >
+        <i className="fas fa-bullseye text-white text-2xl"></i>
+      </button>
+
+      {/* JUMP SEPARADO */}
+      <button
+        className={`pointer-events-auto absolute z-10 w-16 h-16 bg-blue-600/80 rounded-full border border-white/30 flex items-center justify-center active:scale-90 active:bg-blue-700 transition-all ${isEditingHUD && draggingElement === 'jump' ? 'border-dashed border-white animate-pulse' : ''}`}
+        style={{
+          bottom: `${hudPositions.jump.y}px`,
+          right: `${hudPositions.jump.x}px`,
+          transform: `scale(${settings.btnScale || 1.0})`
+        }}
+        onTouchStart={() => {
+          if (isEditingHUD) setDraggingElement('jump');
+          else inputRef.current.jump = true;
+        }}
+      >
+        <i className="fas fa-arrow-up text-white text-xl"></i>
+      </button>
+
+      {/* RELOAD SEPARADO */}
+      <button
+        className={`pointer-events-auto absolute z-10 w-14 h-14 bg-black/60 rounded-full border border-white/20 flex items-center justify-center active:bg-cyan-500 transition-all font-black text-xs ${isEditingHUD && draggingElement === 'reload' ? 'border-dashed border-white animate-pulse' : ''}`}
+        style={{
+          bottom: `${hudPositions.reload.y}px`,
+          right: `${hudPositions.reload.x}px`,
+          transform: `scale(${settings.btnScale || 1.0})`
+        }}
+        onTouchStart={() => { if (isEditingHUD) setDraggingElement('reload'); }}
+        onClick={() => { /* Reload Logic */ }}
+      >
+        <i className="fas fa-rotate text-white text-xl"></i>
+      </button>
+
+      {/* GRENADE SEPARADO */}
+      <button
+        className={`pointer-events-auto absolute z-10 w-14 h-14 rounded-full border flex items-center justify-center transition-all ${isEditingHUD && draggingElement === 'grenade' ? 'border-dashed border-white animate-pulse' : ''} ${inputRef.current.grenadeType === 'smoke' ? 'bg-gray-600 border-white text-white' : 'bg-black/60 border-white/20 text-white shadow-[0_0_15px_rgba(234,88,12,0.3)]'}`}
+        style={{
+          bottom: `${hudPositions.grenade.y}px`,
+          right: `${hudPositions.grenade.x}px`,
+          transform: `scale(${settings.btnScale || 1.0})`
+        }}
+        onTouchStart={() => {
+          if (isEditingHUD) setDraggingElement('grenade');
+          else inputRef.current.grenade = true;
+        }}
+        onClick={() => {
+          if (!isEditingHUD) {
+            inputRef.current.grenadeType = inputRef.current.grenadeType === 'smoke' ? 'explosive' : 'smoke';
+          }
+        }}
+      >
+        <i className={`fas ${inputRef.current.grenadeType === 'smoke' ? 'fa-smog' : 'fa-bomb'} text-white text-xl`}></i>
+      </button>
+
       {/* HUD SUPERIOR */}
-      <div className="absolute top-0 inset-x-0 p-5 flex justify-between items-start bg-gradient-to-b from-black/80 to-transparent">
-
-        {/* Radar e Menu */}
-        <div className="flex gap-4 items-center">
-          <div className="w-28 h-28 rounded-full border-4 border-cyan-500/40 bg-black/60 backdrop-blur-2xl relative overflow-hidden shadow-[0_0_20px_rgba(6,182,212,0.3)]">
-            <div className="absolute inset-0 flex items-center justify-center opacity-30">
-              <div className="w-full h-[1px] bg-cyan-400"></div>
-              <div className="w-[1px] h-full bg-cyan-400"></div>
-            </div>
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-yellow-400 rounded-full shadow-[0_0_15px_#facc15] z-10 animate-pulse border-2 border-white"></div>
-            <div className="absolute top-0 left-0 w-full h-full bg-[conic-gradient(from_0deg,transparent,rgba(6,182,212,0.2),transparent)] animate-[spin_3s_linear_infinite]"></div>
-          </div>
+      <div className="absolute top-0 inset-x-0 p-4 flex justify-between items-start z-[50]">
+        {/* Radar e Menu (Top Left) */}
+        <div className="flex flex-col gap-2 items-start h-full">
           <button
-            className="pointer-events-auto w-24 h-24 bg-red-600 rounded-full flex items-center justify-center border-4 border-white/50 active:scale-90 active:bg-red-700 transition-all absolute bottom-24 right-10 shadow-[0_0_30px_rgba(220,38,38,0.8)] z-50"
-            onTouchStart={() => { inputRef.current.firing = true; }}
-            onTouchEnd={() => { inputRef.current.firing = false; }}
-            onMouseDown={() => { inputRef.current.firing = true; }}
-            onMouseUp={() => { inputRef.current.firing = false; }}
-          >
-            <i className="fas fa-crosshairs text-4xl text-white"></i>
-          </button>
-
-          <button
-            className="pointer-events-auto w-14 h-14 bg-white/10 rounded-3xl flex items-center justify-center border border-white/20 active:scale-90 transition-transform"
+            className="pointer-events-auto w-10 h-10 bg-black/40 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/10 active:scale-90 transition-transform mb-1"
             onClick={onTogglePause}
           >
-            <i className="fas fa-th-large text-xl"></i>
+            <i className="fas fa-cog text-white/70"></i>
           </button>
+
+          <button
+            className="pointer-events-auto w-10 h-10 bg-black/40 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/10 active:scale-90 transition-transform mb-1"
+            onClick={() => {
+              if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(e => console.error(e));
+              } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+              }
+            }}
+          >
+            <i className="fas fa-expand text-white/70"></i>
+          </button>
+
+          <div
+            className={`pointer-events-auto w-24 h-24 rounded-full border-2 border-white/20 bg-black/60 backdrop-blur-xl relative overflow-hidden shadow-2xl ${isEditingHUD && draggingElement === 'radar' ? 'border-dashed border-cyan-400 animate-pulse' : ''}`}
+            style={{
+              position: isEditingHUD ? 'absolute' : 'relative',
+              top: isEditingHUD ? `${hudPositions.radar.y}px` : 'auto',
+              left: isEditingHUD ? `${hudPositions.radar.x}px` : 'auto'
+            }}
+            onTouchStart={() => { if (isEditingHUD) setDraggingElement('radar'); }}
+          >
+            {/* Radar Content */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-20">
+              <div className="w-full h-[1px] bg-white"></div>
+              <div className="w-[1px] h-full bg-white"></div>
+            </div>
+            {/* Pontos de Inimigos (Simulação visual no radar) */}
+            <div className="absolute top-1/4 left-1/3 w-1.5 h-1.5 bg-red-500 rounded-full shadow-[0_0_5px_red]"></div>
+            <div className="absolute top-1/2 left-1/4 w-1.5 h-1.5 bg-red-500 rounded-full shadow-[0_0_5px_red]"></div>
+            <div className="absolute top-2/3 left-1/2 w-1.5 h-1.5 bg-red-500 rounded-full shadow-[0_0_5px_red]"></div>
+
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 bg-green-500 rounded-full shadow-[0_0_10px_#22c55e] z-10 border border-white/40"></div>
+          </div>
         </div>
 
-        {/* Central: Zona Timer */}
-        <div className="absolute left-1/2 -translate-x-1/2 top-8 flex flex-col items-center gap-1">
-          <div className={`px-10 py-3 rounded-full border-2 backdrop-blur-xl transition-all shadow-2xl ${stats.zoneTimer < 10 ? 'bg-red-600/60 border-red-500 animate-pulse' : 'bg-black/60 border-cyan-500/50'}`}>
-            <span className="text-xl font-black italic tracking-widest uppercase">Zona: {stats.zoneTimer}s</span>
-          </div>
-          {stats.zoneTimer === 0 && <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-[0.4em] animate-pulse">Encolhendo...</span>}
+        {/* Central: Zona Timer (Estilo Minimalista) */}
+        <div className="bg-black/40 backdrop-blur-md px-6 py-1.5 rounded-md border border-white/10 mt-2">
+          <span className="text-cyan-400 text-sm font-black italic tracking-widest uppercase">ZONA EM: {stats.zoneTimer}s</span>
         </div>
 
         {/* Direita: Status da Partida */}
-        <div className="flex flex-col items-end gap-3">
-          <div className="flex gap-3">
-            <div className="bg-black/60 px-6 py-2 rounded-2xl border border-white/10 text-right backdrop-blur-md">
-              <div className="text-[10px] font-black uppercase text-red-500 tracking-tighter mb-1">Vivos</div>
-              <div className="text-3xl font-black italic tracking-tighter leading-none">{stats.alive}</div>
-            </div>
-            <div className="bg-black/60 px-6 py-2 rounded-2xl border border-white/10 text-right backdrop-blur-md">
-              <div className="text-[10px] font-black uppercase text-yellow-500 tracking-tighter mb-1">Kills</div>
-              <div className="text-3xl font-black italic tracking-tighter leading-none">{stats.kills}</div>
-            </div>
+        <div className="flex gap-4 p-2 bg-black/20 backdrop-blur-sm rounded-lg">
+          <div className="text-right">
+            <span className="text-[10px] font-black uppercase text-white/40 tracking-tighter">Vivos: </span>
+            <span className="text-sm font-black text-rose-500">{stats.alive}</span>
           </div>
-          {stats.kills > 0 && (
-            <div className="kill-msg bg-yellow-400 text-slate-950 px-5 py-2 rounded-l-2xl text-xs font-black uppercase italic border-l-8 border-slate-900 shadow-xl">
-              Você abateu BOT_#{100 + stats.kills}
-            </div>
-          )}
+          <div className="text-right">
+            <span className="text-[10px] font-black uppercase text-white/40 tracking-tighter">Abates: </span>
+            <span className="text-sm font-black text-yellow-400">{stats.kills}</span>
+          </div>
         </div>
       </div>
 
-      {/* Crosshair Dinâmico */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-        <div className="relative w-12 h-12 flex items-center justify-center opacity-80">
-          <div className="absolute w-[2px] h-3 bg-red-500 top-0"></div>
-          <div className="absolute w-[2px] h-3 bg-red-500 bottom-0"></div>
-          <div className="absolute w-3 h-[2px] bg-red-500 left-0"></div>
-          <div className="absolute w-3 h-[2px] bg-red-500 right-0"></div>
-          <div className="w-1.5 h-1.5 bg-red-500 rounded-full shadow-[0_0_10px_red]"></div>
-        </div>
+      {/* Red Dot Aim */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50">
+        <div className="w-1.5 h-1.5 bg-red-600 rounded-full shadow-[0_0_8px_#ff0000] border border-white/20"></div>
       </div>
 
-      {/* HUD INFERIOR: Vida e Armadura */}
-      <div className="absolute bottom-32 left-1/2 -translate-x-1/2 w-[28rem]">
-        {/* Armadura */}
-        <div className="flex justify-between items-end text-[12px] font-black uppercase px-4 mb-2 drop-shadow-md">
-          <span className={`flex items-center gap-2 ${armorColor}`}>
-            <i className="fas fa-shield-alt"></i> Armadura Nv.{stats.armor.level}
-          </span>
-          <span className="text-2xl italic tracking-tighter">{Math.ceil(stats.armor.durability)}</span>
-        </div>
-        <div className="h-4 bg-black/80 rounded-full border-2 border-white/10 overflow-hidden p-[3px] shadow-lg mb-3">
-          <div
-            className={`h-full rounded-full transition-all duration-300 ${stats.armor.level === 3 ? 'bg-gradient-to-r from-yellow-500 to-yellow-300' : stats.armor.level === 2 ? 'bg-gradient-to-r from-blue-500 to-blue-300' : 'bg-gradient-to-r from-green-500 to-green-300'}`}
-            style={{ width: `${(stats.armor.durability / stats.armor.maxDurability) * 100}%` }}
-          />
-        </div>
-
-        {/* Vida */}
-        <div className="flex justify-between items-end text-[12px] font-black uppercase px-4 mb-3 drop-shadow-md">
-          <span className="text-red-400 flex items-center gap-2">
-            <i className="fas fa-heart"></i> Vida
-          </span>
-          <span className="text-3xl italic tracking-tighter">{Math.ceil(stats.health)}%</span>
-        </div>
-        <div className="h-6 bg-black/80 rounded-full border-2 border-white/10 overflow-hidden p-[4px] shadow-[0_10px_40px_rgba(0,0,0,0.5)]">
-          <div
-            className={`h-full rounded-full transition-all duration-300 shadow-[0_0_25px_rgba(255,255,255,0.3)] ${stats.health < 35 ? 'bg-gradient-to-r from-red-600 via-red-500 to-red-400' : 'bg-gradient-to-r from-green-500 via-green-400 to-emerald-400'}`}
-            style={{ width: `${stats.health}%` }}
-          />
-        </div>
+      {/* BARRA DE VIDA (Estilo Imagem: Fina e no Fundo) */}
+      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[80%] max-w-sm h-1.5 bg-black/40 rounded-full border border-white/10 overflow-hidden z-20">
+        <div
+          className="h-full bg-green-500 transition-all duration-300 shadow-[0_0_10px_#22c55e]"
+          style={{ width: `${stats.health}%` }}
+        />
       </div>
 
       {/* Weapon Info */}
@@ -256,9 +416,9 @@ const GameUI: React.FC<Props> = ({ gameState, stats, settings, setSettings, onTo
 
       {/* MENU DE PAUSA PAINEL */}
       {
-        isPaused && (
+        isPaused && !isEditingHUD && (
           <div className="absolute inset-0 pointer-events-auto bg-black/90 backdrop-blur-2xl z-[100] flex items-center justify-center p-4">
-            <div className="w-full max-w-lg space-y-6 p-8 bg-slate-900/80 border border-white/10 rounded-3xl shadow-2xl relative overflow-hidden">
+            <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto space-y-6 p-6 md:p-8 bg-slate-900/80 border border-white/10 rounded-3xl shadow-2xl relative scrollbar-hide">
               <h2 className="text-3xl font-black italic text-orange-500 uppercase tracking-tighter text-center">CONFIGURAÇÕES</h2>
 
               <div className="space-y-6">
@@ -347,13 +507,21 @@ const GameUI: React.FC<Props> = ({ gameState, stats, settings, setSettings, onTo
 
               <div className="flex flex-col gap-3 pt-2">
                 <button
-                  className="w-full py-4 bg-indigo-600 text-white font-black rounded-xl uppercase italic text-sm active:scale-95 transition-transform shadow-lg shadow-indigo-600/20"
+                  className="w-full py-4 bg-indigo-600 text-white font-black rounded-xl uppercase italic text-sm active:scale-95 transition-all shadow-lg shadow-indigo-600/20"
+                  onClick={() => {
+                    setIsEditingHUD(true);
+                  }}
                 >
+                  <i className="fas fa-up-down-left-right mr-2"></i>
                   MOVER BOTÕES
                 </button>
                 <button
                   className="w-full py-4 bg-rose-600 text-white font-black rounded-xl uppercase italic text-sm active:scale-95 transition-transform shadow-lg shadow-rose-600/20"
+                  onClick={() => {
+                    setSettings({ ...settings, hudPositions: defaultHudPos });
+                  }}
                 >
+                  <i className="fas fa-undo mr-2"></i>
                   RESETAR HUD
                 </button>
                 <button
@@ -374,6 +542,33 @@ const GameUI: React.FC<Props> = ({ gameState, stats, settings, setSettings, onTo
           </div>
         )
       }
+
+      {/* OVERLAY DE EDIÇÃO DE HUD */}
+      {isEditingHUD && (
+        <div className="absolute inset-x-0 top-1/4 pointer-events-none z-[110] flex flex-col items-center">
+          <div className="bg-black/80 backdrop-blur-xl border-2 border-cyan-500 p-6 rounded-3xl pointer-events-auto flex flex-col items-center gap-4 shadow-2xl animate-pulse">
+            <h2 className="text-2xl font-black italic uppercase text-cyan-400 tracking-widest">Modo Edição</h2>
+            <p className="text-[10px] text-white/60 uppercase font-bold text-center">Arraste os grupos destacados para mudar sua posição</p>
+
+            <div className="flex gap-4 w-full">
+              <button
+                className="flex-1 py-3 bg-red-500/20 border border-red-500 text-red-400 rounded-xl font-black uppercase text-[10px] hover:bg-red-500 hover:text-white transition-all"
+                onClick={() => {
+                  setSettings({ ...settings, hudPositions: defaultHudPos });
+                }}
+              >
+                Resetar
+              </button>
+              <button
+                className="flex-1 py-3 bg-cyan-500 text-slate-950 rounded-xl font-black uppercase text-[10px] hover:scale-105 transition-all"
+                onClick={() => setIsEditingHUD(false)}
+              >
+                Concluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div >
   );
 };
